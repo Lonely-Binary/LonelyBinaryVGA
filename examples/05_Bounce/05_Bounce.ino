@@ -28,9 +28,11 @@
  * (12_DoubleBuffer revisits this with a back buffer in PSRAM, which does work,
  * but only pays off when you replace the whole screen at once.)
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
 
-static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return VGA.color565(r, g, b); }
+LB_VGA vga(LB_VGA_320x240);
+
+static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return LB_RGB(r, g, b); }
 
 static const uint16_t BG_R = 0, BG_G = 0, BG_B = 30;
 
@@ -59,8 +61,8 @@ static bool useVSync = true;
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_320x240);
-  VGA.fillScreen(C(BG_R, BG_G, BG_B));
+  vga.begin();
+  vga.fillScreen(C(BG_R, BG_G, BG_B));
   Serial.println("waitVSync toggles every 4 s - watch the edges of the big rectangle");
 }
 
@@ -87,14 +89,14 @@ void loop()
 
   /* Wait first, then draw. The other order achieves nothing. */
   if (useVSync)
-    VGA.waitVSync();
+    vga.waitVSync();
 
   const uint16_t bg = C(BG_R, BG_G, BG_B);
 
   /* Erase only what the objects cover. A fillScreen would be 76800 pixels;
    * erasing these two is a little over ten thousand. */
-  VGA.fillRect((int)sx, (int)sy, BOX_W, BOX_H, bg);
-  VGA.fillCircle((int)bx + BALL_R, (int)by + BALL_R, BALL_R, bg);
+  vga.fillRect((int)sx, (int)sy, BOX_W, BOX_H, bg);
+  vga.fillCircle((int)bx + BALL_R, (int)by + BALL_R, BALL_R, bg);
 
   /* How long this frame actually took. No previous frame on the first pass, so
    * fall back to 1/60 s. */
@@ -108,24 +110,24 @@ void loop()
   moveAndBounce(bx, by, bvx, bvy, BALL_R * 2, BALL_R * 2, dt);
 
   /* Fill plus outline: the crisp edge makes tearing much easier to spot. */
-  VGA.fillRect((int)sx, (int)sy, BOX_W, BOX_H, C(40, 90, 200));
-  VGA.drawRect((int)sx, (int)sy, BOX_W, BOX_H, C(255, 255, 255));
-  VGA.fillCircle((int)bx + BALL_R, (int)by + BALL_R, BALL_R, C(255, 200, 60));
+  vga.fillRect((int)sx, (int)sy, BOX_W, BOX_H, C(40, 90, 200));
+  vga.drawRect((int)sx, (int)sy, BOX_W, BOX_H, C(255, 255, 255));
+  vga.fillCircle((int)bx + BALL_R, (int)by + BALL_R, BALL_R, C(255, 200, 60));
 
   static uint32_t last = 0, lastFrames = 0;
   uint32_t nowMs = millis();
   if (nowMs - last >= 500)
   {
-    uint32_t f = VGA.frameCount();
-    VGA.fillRect(0, 0, 320, 22, C(0, 0, 0));
-    VGA.setTextColor(useVSync ? C(120, 255, 140) : C(255, 120, 120));
-    VGA.drawString(useVSync ? "waitVSync ON  - clean" : "waitVSync OFF - look for tearing", 4, 2);
-    VGA.setTextColor(C(150, 150, 170));
+    uint32_t f = vga.frameCount();
+    vga.fillRect(0, 0, 320, 22, C(0, 0, 0));
+    vga.setTextColor(useVSync ? C(120, 255, 140) : C(255, 120, 120));
+    vga.drawString(useVSync ? "waitVSync ON  - clean" : "waitVSync OFF - look for tearing", 4, 2);
+    vga.setTextColor(C(150, 150, 170));
     char buf[40];
     /* Scale by the real interval; a nominal 500 would over-report the rate. */
     snprintf(buf, sizeof(buf), "%luHz",
              (unsigned long)((f - lastFrames) * 1000UL / (nowMs - last)));
-    VGA.drawString(buf, 280, 2);
+    vga.drawString(buf, 280, 2);
     lastFrames = f;
     last = nowMs;
   }

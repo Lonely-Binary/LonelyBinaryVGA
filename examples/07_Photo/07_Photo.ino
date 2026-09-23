@@ -25,40 +25,42 @@
  * TODO: the bundled photo comes from this repository's VGA Gallery assets.
  *       Replace it with an image we own before publishing the course.
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
 #include "photo_data.h"
 
-static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return VGA.color565(r, g, b); }
+LB_VGA vga(LB_VGA_320x240);
+
+static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return LB_RGB(r, g, b); }
 
 /* ---- Screen 1: an image is an array ---- */
 static void screenArray()
 {
-  VGA.fillScreen(C(0, 0, 30));
-  VGA.setTextColor(C(255, 255, 255));
-  VGA.drawString("4. An image IS an array", 4, 2);
+  vga.fillScreen(C(0, 0, 30));
+  vga.setTextColor(C(255, 255, 255));
+  vga.drawString("4. An image IS an array", 4, 2);
 
   /* Actual size: 16x16, almost too small to read - which is the point. */
-  VGA.pushImage(12, 30, ICON_W, ICON_H, icon16);
-  VGA.setTextColor(C(160, 180, 220));
-  VGA.drawString("1x", 14, 50);
+  vga.drawRGB565(12, 30, ICON_W, ICON_H, icon16);
+  vga.setTextColor(C(160, 180, 220));
+  vga.drawString("1x", 14, 50);
 
   /* Ten times bigger: one number, one 10x10 square. No interpolation, no
    * smoothing - the most literal possible meaning of "scale up". */
   const int SCALE = 10, X0 = 60, Y0 = 30;
   for (int y = 0; y < ICON_H; y++)
     for (int x = 0; x < ICON_W; x++)
-      VGA.fillRect(X0 + x * SCALE, Y0 + y * SCALE, SCALE, SCALE, icon16[y * ICON_W + x]);
+      vga.fillRect(X0 + x * SCALE, Y0 + y * SCALE, SCALE, SCALE, icon16[y * ICON_W + x]);
 
-  VGA.drawString("10x = one number, one square", 60, 194);
+  vga.drawString("10x = one number, one square", 60, 194);
 
   /* Print the first few numbers so they can be matched against the picture. */
-  VGA.setTextColor(C(255, 220, 100));
+  vga.setTextColor(C(255, 220, 100));
   char buf[64];
   snprintf(buf, sizeof(buf), "icon16[0..3] = %04X %04X %04X %04X",
            icon16[0], icon16[1], icon16[2], icon16[3]);
-  VGA.drawString(buf, 4, 212);
+  vga.drawString(buf, 4, 212);
   snprintf(buf, sizeof(buf), "16 x 16 = 256 numbers, %d bytes", (int)sizeof(icon16));
-  VGA.drawString(buf, 4, 226);
+  vga.drawString(buf, 4, 226);
 }
 
 /* ---- Screen 2: full-screen photo and the size comparison ---- */
@@ -66,47 +68,50 @@ static void screenPhoto()
 {
   /* The photo is exactly 320x240, so it fills the screen. Arguments 3 and 4 are
    * the top-left corner. */
-  VGA.drawJpg(photo_jpg, PHOTO_JPG_LEN, 0, 0);
+  vga.drawJpg(photo_jpg, PHOTO_JPG_LEN, 0, 0);
 
-  VGA.fillRect(0, 210, 320, 30, C(0, 0, 0));
-  VGA.setTextColor(C(255, 255, 255));
+  vga.fillRect(0, 210, 320, 30, C(0, 0, 0));
+  vga.setTextColor(C(255, 255, 255));
   char buf[64];
   snprintf(buf, sizeof(buf), "raw RGB565: %d bytes", PHOTO_RAW_BYTES);
-  VGA.drawString(buf, 4, 212);
-  VGA.setTextColor(C(120, 255, 140));
+  vga.drawString(buf, 4, 212);
+  vga.setTextColor(C(120, 255, 140));
   snprintf(buf, sizeof(buf), "JPEG: %d bytes  (%.1fx smaller)",
            PHOTO_JPG_LEN, (float)PHOTO_RAW_BYTES / PHOTO_JPG_LEN);
-  VGA.drawString(buf, 4, 226);
+  vga.drawString(buf, 4, 226);
 }
 
 /* ---- Screen 3: scaling and centring ---- */
 static void screenScale()
 {
-  VGA.fillScreen(C(20, 20, 35));
-  VGA.setTextColor(C(255, 255, 255));
-  VGA.drawString("scale & center", 4, 2);
+  vga.fillScreen(C(20, 20, 35));
+  vga.setTextColor(C(255, 255, 255));
+  vga.drawString("scale & center", 4, 2);
 
-  /* The ninth argument of drawJpg is the scale factor; the zeros before it are
-   * maxWidth/maxHeight/offX/offY, unconstrained here. */
+  /* !! Scale is 1, 1/2, 1/4 or 1/8 - nothing in between !!
+   *   The argument is a float so the call site reads naturally, but the decoder
+   *   only descales by powers of two. 0.5 is exact. A value like 0.3 rounds
+   *   DOWN to 1/4, i.e. smaller than asked for rather than larger, so a layout
+   *   can never overflow its box. */
   const float s = 0.5f;
   const int w = (int)(PHOTO_W * s), h = (int)(PHOTO_H * s);
   const int x = (320 - w) / 2, y = (240 - h) / 2; /* computed, not eyeballed */
-  VGA.drawJpg(photo_jpg, PHOTO_JPG_LEN, x, y, 0, 0, 0, 0, s);
+  vga.drawJpg(photo_jpg, PHOTO_JPG_LEN, x, y, s);
 
-  VGA.drawRect(x - 1, y - 1, w + 2, h + 2, C(255, 220, 100));
+  vga.drawRect(x - 1, y - 1, w + 2, h + 2, C(255, 220, 100));
 
-  VGA.setTextColor(C(160, 180, 220));
+  vga.setTextColor(C(160, 180, 220));
   char buf[64];
   snprintf(buf, sizeof(buf), "scale %.1f -> %dx%d", s, w, h);
-  VGA.drawString(buf, 4, 210);
+  vga.drawString(buf, 4, 210);
   snprintf(buf, sizeof(buf), "x = (320 - %d) / 2 = %d", w, x);
-  VGA.drawString(buf, 4, 224);
+  vga.drawString(buf, 4, 224);
 }
 
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_320x240);
+  vga.begin();
   Serial.printf("raw RGB565 %d bytes, JPEG %d bytes, %.1fx smaller\n",
                 PHOTO_RAW_BYTES, PHOTO_JPG_LEN,
                 (float)PHOTO_RAW_BYTES / PHOTO_JPG_LEN);
@@ -139,7 +144,7 @@ void loop()
      *
      * The call stays here so the first 16.7 ms at least does not tear.
      */
-    VGA.waitVSync();
+    vga.waitVSync();
     uint32_t t0 = micros();
     switch (screen)
     {

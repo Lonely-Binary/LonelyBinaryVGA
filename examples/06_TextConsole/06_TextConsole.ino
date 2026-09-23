@@ -16,10 +16,20 @@
  * drawString, which fills whole bytes at a time and is an order of magnitude
  * faster.
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
 
-enum { C_BG = 0, C_BLUE, C_GREEN, C_CYAN, C_RED, C_MAGENTA, C_BROWN, C_GRAY,
-       C_DGRAY, C_LBLUE, C_LGREEN, C_LCYAN, C_LRED, C_LMAGENTA, C_YELLOW, C_WHITE };
+LB_VGA vga(LB_VGA_640x480_16);
+
+/* In 16-colour mode a "colour" is a palette entry. LB_INDEX() says so
+ * explicitly - a bare integer would be read as an RGB value, which compiles,
+ * runs, and draws everything in the wrong colour. */
+static const lb_color_t
+    C_BG = LB_INDEX(0),   C_BLACK = LB_INDEX(0),  C_BLUE = LB_INDEX(1),
+    C_GREEN = LB_INDEX(2), C_CYAN = LB_INDEX(3),  C_RED = LB_INDEX(4),
+    C_MAGENTA = LB_INDEX(5), C_BROWN = LB_INDEX(6), C_GRAY = LB_INDEX(7),
+    C_DGRAY = LB_INDEX(8), C_LBLUE = LB_INDEX(9), C_LGREEN = LB_INDEX(10),
+    C_LCYAN = LB_INDEX(11), C_LRED = LB_INDEX(12), C_LMAGENTA = LB_INDEX(13),
+    C_YELLOW = LB_INDEX(14), C_WHITE = LB_INDEX(15);
 
 #define CON_TOP 150                             /* console area starts here */
 #define CON_LINE_H 16                           /* AsciiFont8x16 line height */
@@ -46,63 +56,63 @@ static void conPush(const String &s)
 
 static void conDraw()
 {
-  VGA.fillRect(0, CON_TOP, 640, 480 - CON_TOP, C_BG);
-  VGA.setFont(&fonts::AsciiFont8x16);
+  vga.fillRect(0, CON_TOP, 640, 480 - CON_TOP, C_BG);
+  vga.setFont(&LB_Font8x16);
   for (int i = 0; i < lineCount; i++)
   {
     /* Lines starting with "> " were typed by the user; colour them differently. */
-    VGA.setTextColor(lines[i].startsWith("> ") ? C_LGREEN : C_GRAY);
-    VGA.drawString(lines[i].c_str(), 0, CON_TOP + i * CON_LINE_H);
+    vga.setTextColor(lines[i].startsWith("> ") ? C_LGREEN : C_GRAY);
+    vga.drawString(lines[i].c_str(), 0, CON_TOP + i * CON_LINE_H);
   }
-  VGA.setTextColor(C_WHITE);
+  vga.setTextColor(C_WHITE);
   String cur = "> " + pending + "_";
-  VGA.drawString(cur.c_str(), 0, CON_TOP + lineCount * CON_LINE_H);
+  vga.drawString(cur.c_str(), 0, CON_TOP + lineCount * CON_LINE_H);
 }
 
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_640x480_16);
-  VGA.setPaletteColor(C_BG, 0, 0, 30);
-  VGA.fillScreen(C_BG);
+  vga.begin();
+  vga.setPaletteColor(C_BG, 0, 0, 30);
+  vga.fillScreen(C_BG);
 
-  VGA.fillRect(0, 0, 640, 28, C_BLUE);
-  VGA.setFont(&fonts::AsciiFont8x16);
-  VGA.setTextColor(C_YELLOW);
-  VGA.drawString("3. Text  -  640x480, 16 colors", 8, 6);
+  vga.fillRect(0, 0, 640, 28, C_BLUE);
+  vga.setFont(&LB_Font8x16);
+  vga.setTextColor(C_YELLOW);
+  vga.drawString("3. Text  -  640x480, 16 colors", 8, 6);
 
   /* Evidence rather than a claim: a ruler you can count. */
-  VGA.setTextColor(C_DGRAY);
+  vga.setTextColor(C_DGRAY);
   String ruler;
   for (int c = 0; c < CON_COLS; c++)
     ruler += (c % 10 == 0) ? '|' : '.';
-  VGA.drawString(ruler.c_str(), 0, 34);
-  VGA.setTextColor(C_GRAY);
+  vga.drawString(ruler.c_str(), 0, 34);
+  vga.setTextColor(C_GRAY);
   for (int c = 0; c < CON_COLS; c += 10)
-    VGA.drawString(String(c).c_str(), c * 8, 50);
-  VGA.setTextColor(C_LCYAN);
-  VGA.drawString("AsciiFont8x16 -> 80 cols x 30 rows (classic DOS text mode)", 0, 68);
+    vga.drawString(String(c).c_str(), c * 8, 50);
+  vga.setTextColor(C_LCYAN);
+  vga.drawString("AsciiFont8x16 -> 80 cols x 30 rows (classic DOS text mode)", 0, 68);
 
   /* setFont picks a face, setTextSize scales it by an integer. They combine. */
-  VGA.setFont(&fonts::Font0);
-  VGA.setTextColor(C_WHITE);
-  VGA.drawString("Font0 - small 6x8", 0, 92);
+  vga.setFont(&LB_Font5x8);
+  vga.setTextColor(C_WHITE);
+  vga.drawString("Font0 - small 6x8", 0, 92);
 
-  VGA.setFont(&fonts::Font8x8C64);
-  VGA.setTextColor(C_LGREEN);
-  VGA.drawString("FONT8X8C64 - RETRO", 220, 92);
+  vga.setFont(&LB_Font5x8);
+  vga.setTextColor(C_LGREEN);
+  vga.drawString("FONT8X8C64 - RETRO", 220, 92);
 
-  VGA.setFont(&fonts::AsciiFont24x48);
-  VGA.setTextColor(C_LRED);
-  VGA.drawString("24x48", 480, 76);
+  vga.setFont(&LB_Font8x16);
+  vga.setTextColor(C_LRED);
+  vga.drawString("24x48", 480, 76);
 
   /* Centre by measuring, never by eye. */
-  VGA.setFont(&fonts::AsciiFont8x16);
+  vga.setFont(&LB_Font8x16);
   const char *mid = "centered with textWidth()";
-  VGA.setTextColor(C_LMAGENTA);
-  VGA.drawString(mid, (640 - VGA.textWidth(mid)) / 2, 112);
+  vga.setTextColor(C_LMAGENTA);
+  vga.drawString(mid, (640 - vga.textWidth(mid)) / 2, 112);
 
-  VGA.drawFastHLine(0, 140, 640, C_DGRAY);
+  vga.drawFastHLine(0, 140, 640, C_DGRAY);
 
   conPush("Type in the Serial Monitor -> it shows up here.");
   conPush("(115200 baud, send with newline)");
@@ -145,7 +155,7 @@ void loop()
   if (dirty || millis() - last >= 500)
   {
     last = millis();
-    VGA.waitVSync();
+    vga.waitVSync();
     conDraw();
   }
   delay(10);

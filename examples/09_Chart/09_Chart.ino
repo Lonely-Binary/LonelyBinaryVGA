@@ -28,10 +28,20 @@
  * That is the general habit: **before concluding something is broken, put a
  * known-good control next to it.**
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
 
-enum { C_BG = 0, C_BLUE, C_GREEN, C_CYAN, C_RED, C_MAGENTA, C_BROWN, C_GRAY,
-       C_DGRAY, C_LBLUE, C_LGREEN, C_LCYAN, C_LRED, C_LMAGENTA, C_YELLOW, C_WHITE };
+LB_VGA vga(LB_VGA_640x480_16);
+
+/* In 16-colour mode a "colour" is a palette entry. LB_INDEX() says so
+ * explicitly - a bare integer would be read as an RGB value, which compiles,
+ * runs, and draws everything in the wrong colour. */
+static const lb_color_t
+    C_BG = LB_INDEX(0),   C_BLACK = LB_INDEX(0),  C_BLUE = LB_INDEX(1),
+    C_GREEN = LB_INDEX(2), C_CYAN = LB_INDEX(3),  C_RED = LB_INDEX(4),
+    C_MAGENTA = LB_INDEX(5), C_BROWN = LB_INDEX(6), C_GRAY = LB_INDEX(7),
+    C_DGRAY = LB_INDEX(8), C_LBLUE = LB_INDEX(9), C_LGREEN = LB_INDEX(10),
+    C_LCYAN = LB_INDEX(11), C_LRED = LB_INDEX(12), C_LMAGENTA = LB_INDEX(13),
+    C_YELLOW = LB_INDEX(14), C_WHITE = LB_INDEX(15);
 
 /*
  * Value to screen y. The whole chart rests on these seven lines.
@@ -50,7 +60,7 @@ static int mapY(float v, float vmin, float vmax, int top, int h)
 }
 
 /* ---------- bar chart ---------- */
-struct Bar { const char *name; float value; uint8_t color; };
+struct Bar { const char *name; float value; lb_color_t color; };
 static const Bar bars[] = {
     {"320x240", 25, C_LGREEN},
     {"640x480x16", 46, C_LCYAN},
@@ -64,15 +74,15 @@ static void drawBarChart(int x0, int y0, int w, int h)
 
   /* Grid and y labels first, so the bars are drawn over them rather than
    * scratched through by them. */
-  VGA.setFont(&fonts::AsciiFont8x16);
+  vga.setFont(&LB_Font8x16);
   for (int v = 0; v <= 100; v += 25)
   {
     int y = mapY(v, 0, vmax, y0, h);
-    VGA.drawFastHLine(x0, y, w, C_DGRAY);
-    VGA.setTextColor(C_GRAY);
+    vga.drawFastHLine(x0, y, w, C_DGRAY);
+    vga.setTextColor(C_GRAY);
     char t[8];
     snprintf(t, sizeof(t), "%3d%%", v);
-    VGA.drawString(t, x0 - 36, y - 8); /* -8 = half a line, to sit on the tick */
+    vga.drawString(t, x0 - 36, y - 8); /* -8 = half a line, to sit on the tick */
   }
 
   /* Bar width and spacing derive from the count, so adding a bar needs no other
@@ -82,20 +92,20 @@ static void drawBarChart(int x0, int y0, int w, int h)
   {
     int bx = x0 + i * slot + (slot - bw) / 2;
     int by = mapY(bars[i].value, 0, vmax, y0, h);
-    VGA.fillRect(bx, by, bw, y0 + h - by, bars[i].color);
+    vga.fillRect(bx, by, bw, y0 + h - by, bars[i].color);
 
     char t[8];
     snprintf(t, sizeof(t), "%d%%", (int)bars[i].value);
-    VGA.setTextColor(C_WHITE);
-    VGA.drawString(t, bx + (bw - VGA.textWidth(t)) / 2, by - 18); /* centred by measurement */
+    vga.setTextColor(C_WHITE);
+    vga.drawString(t, bx + (bw - vga.textWidth(t)) / 2, by - 18); /* centred by measurement */
 
-    VGA.setTextColor(C_GRAY);
-    VGA.drawString(bars[i].name,
-                   bx + (bw - VGA.textWidth(bars[i].name)) / 2, y0 + h + 4);
+    vga.setTextColor(C_GRAY);
+    vga.drawString(bars[i].name,
+                   bx + (bw - vga.textWidth(bars[i].name)) / 2, y0 + h + 4);
   }
 
-  VGA.drawFastHLine(x0, y0 + h, w, C_WHITE);
-  VGA.drawFastVLine(x0, y0, h, C_WHITE);
+  vga.drawFastHLine(x0, y0 + h, w, C_WHITE);
+  vga.drawFastVLine(x0, y0, h, C_WHITE);
 }
 
 /* ---------- live line chart ---------- */
@@ -129,13 +139,13 @@ static void plot(const float *d, int n, float vmin, float vmax,
                  int x0, int y0, int w, int h, uint8_t color)
 {
   for (int i = 1; i < n; i++)
-    VGA.drawLine(x0 + (i - 1) * w / (HIST - 1), mapY(d[i - 1], vmin, vmax, y0, h),
+    vga.drawLine(x0 + (i - 1) * w / (HIST - 1), mapY(d[i - 1], vmin, vmax, y0, h),
                  x0 + i * w / (HIST - 1), mapY(d[i], vmin, vmax, y0, h), color);
 }
 
 static void drawLineChart(int x0, int y0, int w, int h)
 {
-  VGA.fillRect(x0 - 44, y0 - 20, w + 48, h + 40, C_BG);
+  vga.fillRect(x0 - 44, y0 - 20, w + 48, h + 40, C_BG);
   if (histN < 2) return;
 
   /* The range has to follow the data. Hard-coding 0..100 would leave the
@@ -154,16 +164,16 @@ static void drawLineChart(int x0, int y0, int w, int h)
   vmin -= pad;
   vmax += pad;
 
-  VGA.setFont(&fonts::AsciiFont8x16);
+  vga.setFont(&LB_Font8x16);
   for (int i = 0; i <= 2; i++)
   {
     float v = vmin + (vmax - vmin) * i / 2;
     int y = mapY(v, vmin, vmax, y0, h);
-    VGA.drawFastHLine(x0, y, w, C_DGRAY);
-    VGA.setTextColor(C_GRAY);
+    vga.drawFastHLine(x0, y, w, C_DGRAY);
+    vga.setTextColor(C_GRAY);
     char t[10];
     snprintf(t, sizeof(t), "%.1f", v);
-    VGA.drawString(t, x0 - 44, y - 8);
+    vga.drawString(t, x0 - 44, y - 8);
   }
 
   /* Join consecutive samples with segments. Plotting isolated points leaves
@@ -172,43 +182,43 @@ static void drawLineChart(int x0, int y0, int w, int h)
   plot(hTemp, histN, vmin, vmax, x0, y0, w, h, C_YELLOW);
 
   /* A legend is not optional when one of the series is invented. */
-  VGA.fillRect(x0 + w - 200, y0 + 4, 12, 3, C_YELLOW);
-  VGA.setTextColor(C_YELLOW);
-  VGA.drawString("chip temp (real)", x0 + w - 184, y0 - 4);
-  VGA.fillRect(x0 + w - 200, y0 + 24, 12, 3, C_LCYAN);
-  VGA.setTextColor(C_LCYAN);
-  VGA.drawString("sine (SIMULATED)", x0 + w - 184, y0 + 16);
+  vga.fillRect(x0 + w - 200, y0 + 4, 12, 3, C_YELLOW);
+  vga.setTextColor(C_YELLOW);
+  vga.drawString("chip temp (real)", x0 + w - 184, y0 - 4);
+  vga.fillRect(x0 + w - 200, y0 + 24, 12, 3, C_LCYAN);
+  vga.setTextColor(C_LCYAN);
+  vga.drawString("sine (SIMULATED)", x0 + w - 184, y0 + 16);
 
   int lx = x0 + (histN - 1) * w / (HIST - 1);
   int ly = mapY(hTemp[histN - 1], vmin, vmax, y0, h);
-  VGA.fillCircle(lx, ly, 3, C_LRED);
+  vga.fillCircle(lx, ly, 3, C_LRED);
   char t[16];
   snprintf(t, sizeof(t), "%.1fC", hTemp[histN - 1]);
-  VGA.setTextColor(C_WHITE);
-  VGA.drawString(t, lx - VGA.textWidth(t) - 6, ly - 18);
+  vga.setTextColor(C_WHITE);
+  vga.drawString(t, lx - vga.textWidth(t) - 6, ly - 18);
 
-  VGA.drawFastHLine(x0, y0 + h, w, C_WHITE);
-  VGA.drawFastVLine(x0, y0, h, C_WHITE);
+  vga.drawFastHLine(x0, y0 + h, w, C_WHITE);
+  vga.drawFastVLine(x0, y0, h, C_WHITE);
 }
 
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_640x480_16);
-  VGA.setPaletteColor(C_BG, 0, 0, 25);
-  VGA.fillScreen(C_BG);
+  vga.begin();
+  vga.setPaletteColor(C_BG, 0, 0, 25);
+  vga.fillScreen(C_BG);
 
-  VGA.fillRect(0, 0, 640, 28, C_BLUE);
-  VGA.setFont(&fonts::AsciiFont8x16);
-  VGA.setTextColor(C_YELLOW);
-  VGA.drawString("5. Charts  -  drawn by hand, no chart library", 8, 6);
+  vga.fillRect(0, 0, 640, 28, C_BLUE);
+  vga.setFont(&LB_Font8x16);
+  vga.setTextColor(C_YELLOW);
+  vga.drawString("5. Charts  -  drawn by hand, no chart library", 8, 6);
 
-  VGA.setTextColor(C_WHITE);
-  VGA.drawString("ISR cost per display mode (measured)", 60, 40);
+  vga.setTextColor(C_WHITE);
+  vga.drawString("ISR cost per display mode (measured)", 60, 40);
   drawBarChart(60, 66, 520, 180);
 
-  VGA.setTextColor(C_WHITE);
-  VGA.drawString("1 sample/s   (see legend: one line is simulated)", 60, 276);
+  vga.setTextColor(C_WHITE);
+  vga.drawString("1 sample/s   (see legend: one line is simulated)", 60, 276);
 
   Serial.println("Bars are this project's own measurements; lines are temperature + a control");
 }
@@ -223,7 +233,7 @@ void loop()
     float t = temperatureRead();
     float sim = t + 3.0f * sinf(millis() / 8000.0f);
     pushSample(t, sim);
-    VGA.waitVSync();
+    vga.waitVSync();
     drawLineChart(60, 302, 520, 150);
   }
   delay(20);

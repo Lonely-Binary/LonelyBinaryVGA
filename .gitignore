@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+build/
+
+# Bench sketches and scratch work. Local only - never published.
+internal/

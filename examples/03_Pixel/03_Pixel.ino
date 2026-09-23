@@ -16,52 +16,54 @@
  *
  * Uses 320x240 full colour, since we are showing colour gradients.
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
+
+LB_VGA vga(LB_VGA_320x240);
 
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_320x240);
-  VGA.fillScreen(VGA.color565(0, 0, 30));
+  vga.begin();
+  vga.fillScreen(LB_RGB(0, 0, 30));
 
-  VGA.setTextColor(VGA.color565(255, 255, 255));
-  VGA.drawString("1. A pixel", 4, 2);
+  vga.setTextColor(LB_RGB(255, 255, 255));
+  vga.drawString("1. A pixel", 4, 2);
 
   /* The coordinate system: a pixel in each corner, labelled. */
-  const int W = VGA.width(), H = VGA.height();
-  VGA.setTextColor(VGA.color565(120, 200, 255));
-  VGA.drawPixel(0, 0, VGA.color565(255, 0, 0));
-  VGA.drawString("(0,0)", 4, 14);
-  VGA.drawPixel(W - 1, 0, VGA.color565(255, 0, 0));
-  VGA.drawString("(319,0)", W - 46, 14);
-  VGA.drawPixel(0, H - 1, VGA.color565(255, 0, 0));
-  VGA.drawString("(0,239)", 4, H - 22);
-  VGA.drawPixel(W - 1, H - 1, VGA.color565(255, 0, 0));
-  VGA.drawString("(319,239)", W - 58, H - 22);
+  const int W = vga.width(), H = vga.height();
+  vga.setTextColor(LB_RGB(120, 200, 255));
+  vga.drawPixel(0, 0, LB_RGB(255, 0, 0));
+  vga.drawString("(0,0)", 4, 14);
+  vga.drawPixel(W - 1, 0, LB_RGB(255, 0, 0));
+  vga.drawString("(319,0)", W - 46, 14);
+  vga.drawPixel(0, H - 1, LB_RGB(255, 0, 0));
+  vga.drawString("(0,239)", 4, H - 22);
+  vga.drawPixel(W - 1, H - 1, LB_RGB(255, 0, 0));
+  vga.drawString("(319,239)", W - 58, H - 22);
 
   /* A diagonal put down one pixel at a time. drawLine() is deliberately not
    * used yet: first see that a line is just a run of pixels. The next example
    * introduces drawLine, which does the same thing far faster. */
   for (int i = 0; i < 100; i++)
-    VGA.drawPixel(30 + i, 40 + i, VGA.color565(255, 255, 0));
-  VGA.setTextColor(VGA.color565(255, 255, 0));
-  VGA.drawString("drawn pixel by pixel", 136, 88);
+    vga.drawPixel(30 + i, 40 + i, LB_RGB(255, 255, 0));
+  vga.setTextColor(LB_RGB(255, 255, 0));
+  vga.drawString("drawn pixel by pixel", 136, 88);
 
   /* How many steps RGB565 actually has: 32 red, 64 green, 32 blue. Drawn
    * together you can see the green steps are half the width of the others. */
   const int y0 = 150, bh = 18;
-  VGA.setTextColor(VGA.color565(200, 200, 200));
-  VGA.drawString("R 5bit = 32", 4, y0 - 12);
+  vga.setTextColor(LB_RGB(200, 200, 200));
+  vga.drawString("R 5bit = 32", 4, y0 - 12);
   for (int i = 0; i < 32; i++)
-    VGA.fillRect(70 + i * 7, y0 - 12, 7, bh, VGA.color565(i * 255 / 31, 0, 0));
+    vga.fillRect(70 + i * 7, y0 - 12, 7, bh, LB_RGB(i * 255 / 31, 0, 0));
 
-  VGA.drawString("G 6bit = 64", 4, y0 + 12);
+  vga.drawString("G 6bit = 64", 4, y0 + 12);
   for (int i = 0; i < 64; i++)
-    VGA.fillRect(70 + i * 3, y0 + 12, 3, bh, VGA.color565(0, i * 255 / 63, 0));
+    vga.fillRect(70 + i * 3, y0 + 12, 3, bh, LB_RGB(0, i * 255 / 63, 0));
 
-  VGA.drawString("B 5bit = 32", 4, y0 + 36);
+  vga.drawString("B 5bit = 32", 4, y0 + 36);
   for (int i = 0; i < 32; i++)
-    VGA.fillRect(70 + i * 7, y0 + 36, 7, bh, VGA.color565(0, 0, i * 255 / 31));
+    vga.fillRect(70 + i * 7, y0 + 36, 7, bh, LB_RGB(0, 0, i * 255 / 31));
 
   Serial.println("Screen up");
 }
@@ -77,7 +79,7 @@ void setup()
 void loop()
 {
   static int step = 0;
-  const int W = VGA.width(), H = VGA.height();
+  const int W = vga.width(), H = vga.height();
 
   /* Unroll the border into a single line; step is the distance along it. */
   auto posAt = [&](int s, int &x, int &y) {
@@ -90,16 +92,16 @@ void loop()
 
   int x, y;
   posAt(step, x, y); /* erase the old dot */
-  VGA.drawPixel(x, y, VGA.color565(0, 0, 30));
+  vga.drawPixel(x, y, LB_RGB(0, 0, 30));
   step += 2;
   posAt(step, x, y);
-  VGA.drawPixel(x, y, VGA.color565(255, 255, 255));
+  vga.drawPixel(x, y, LB_RGB(255, 255, 255));
 
-  VGA.fillRect(120, 110, 100, 12, VGA.color565(0, 0, 30));
-  VGA.setTextColor(VGA.color565(255, 255, 255));
+  vga.fillRect(120, 110, 100, 12, LB_RGB(0, 0, 30));
+  vga.setTextColor(LB_RGB(255, 255, 255));
   char buf[24];
   snprintf(buf, sizeof(buf), "(%d,%d)", x, y);
-  VGA.drawString(buf, 120, 110);
+  vga.drawString(buf, 120, 110);
 
   delay(8);
 }

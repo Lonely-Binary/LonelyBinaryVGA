@@ -48,16 +48,18 @@
  * for release feels broken: you have held it long enough and nothing happens
  * until you let go. Small difference, large change in feel.
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
 #include "photo_small.h"
 #include "button_types.h" /* enums must live in a header - see that file */
+
+LB_VGA vga(LB_VGA_320x240);
 
 #define BTN_PIN 0      /* the on-board BOOT button */
 #define DEBOUNCE_MS 20 /* a level must hold this long to count */
 #define LONG_MS 600    /* held at least this long is a long press */
 #define DOUBLE_MS 250  /* after release, wait this long for a second press */
 
-static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return VGA.color565(r, g, b); }
+static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return LB_RGB(r, g, b); }
 static uint16_t BG, PANEL, ACCENT, DIM, HILITE, OKC, OFFC;
 
 /* ---------- button: debounce plus gesture recognition ---------- */
@@ -160,60 +162,60 @@ static int running = -1; /* -1 = in the menu, otherwise the running item */
 /* ---------- the screens behind the menu; deliberately small ---------- */
 static void screenShapes()
 {
-  VGA.fillScreen(BG);
-  VGA.drawRect(20, 40, 80, 50, C(0, 220, 255));
-  VGA.fillRect(200, 40, 80, 50, C(0, 220, 255));
-  VGA.drawCircle(60, 140, 28, C(80, 230, 120));
-  VGA.fillCircle(240, 140, 28, C(80, 230, 120));
-  VGA.drawTriangle(110, 200, 190, 200, 150, 150, C(255, 120, 200));
+  vga.fillScreen(BG);
+  vga.drawRect(20, 40, 80, 50, C(0, 220, 255));
+  vga.fillRect(200, 40, 80, 50, C(0, 220, 255));
+  vga.drawCircle(60, 140, 28, C(80, 230, 120));
+  vga.fillCircle(240, 140, 28, C(80, 230, 120));
+  vga.drawTriangle(110, 200, 190, 200, 150, 150, C(255, 120, 200));
 }
 
 /* Speeds in pixels per second, as established in 05_Bounce. */
 static float bx = 40, by = 60, bvx = 126, bvy = 96;
 static void screenBounceStep(float dt)
 {
-  VGA.fillCircle((int)bx, (int)by, 10, BG);
+  vga.fillCircle((int)bx, (int)by, 10, BG);
   bx += bvx * dt;
   by += bvy * dt;
   if (bx < 42 || bx > 278) bvx = -bvx;
   if (by < 52 || by > 228) bvy = -bvy;
-  VGA.fillCircle((int)bx, (int)by, 10, C(255, 200, 60));
+  vga.fillCircle((int)bx, (int)by, 10, C(255, 200, 60));
 }
 
 static void screenPhoto()
 {
-  VGA.fillScreen(BG);
-  VGA.drawJpg(photo_jpg, PHOTO_JPG_LEN, (320 - PHOTO_W) / 2, (240 - PHOTO_H) / 2);
-  VGA.drawRect((320 - PHOTO_W) / 2 - 1, (240 - PHOTO_H) / 2 - 1, PHOTO_W + 2, PHOTO_H + 2, PANEL);
+  vga.fillScreen(BG);
+  vga.drawJpg(photo_jpg, PHOTO_JPG_LEN, (320 - PHOTO_W) / 2, (240 - PHOTO_H) / 2);
+  vga.drawRect((320 - PHOTO_W) / 2 - 1, (240 - PHOTO_H) / 2 - 1, PHOTO_W + 2, PHOTO_H + 2, PANEL);
 }
 
 static void screenChart()
 {
-  VGA.fillScreen(BG);
+  vga.fillScreen(BG);
   static const int v[] = {25, 46, 68};
   static const char *n[] = {"320", "640/16", "PSRAM"};
   for (int i = 0; i < 3; i++)
   {
     int h = v[i] * 140 / 100;
     int x = 50 + i * 80;
-    VGA.fillRect(x, 200 - h, 50, h, C(80 + i * 60, 220 - i * 50, 255 - i * 80));
-    VGA.setTextColor(C(255, 255, 255));
+    vga.fillRect(x, 200 - h, 50, h, C(80 + i * 60, 220 - i * 50, 255 - i * 80));
+    vga.setTextColor(C(255, 255, 255));
     char t[8]; snprintf(t, sizeof(t), "%d%%", v[i]);
-    VGA.drawString(t, x + (50 - VGA.textWidth(t)) / 2, 200 - h - 12);
-    VGA.setTextColor(DIM);
-    VGA.drawString(n[i], x + (50 - VGA.textWidth(n[i])) / 2, 204);
+    vga.drawString(t, x + (50 - vga.textWidth(t)) / 2, 200 - h - 12);
+    vga.setTextColor(DIM);
+    vga.drawString(n[i], x + (50 - vga.textWidth(n[i])) / 2, 204);
   }
-  VGA.drawFastHLine(40, 200, 250, C(255, 255, 255));
+  vga.drawFastHLine(40, 200, 250, C(255, 255, 255));
 }
 
 static void drawRunningBar()
 {
-  VGA.fillRect(0, 0, 320, 14, PANEL);
-  VGA.setTextColor(ACCENT);
-  VGA.drawString(items[running].name, 4, 3);
-  VGA.setTextColor(DIM);
+  vga.fillRect(0, 0, 320, 14, PANEL);
+  vga.setTextColor(ACCENT);
+  vga.drawString(items[running].name, 4, 3);
+  vga.setTextColor(DIM);
   const char *tip = "double-click = back";
-  VGA.drawString(tip, 316 - VGA.textWidth(tip), 3);
+  vga.drawString(tip, 316 - vga.textWidth(tip), 3);
 }
 
 /* ---------- diagnostics ---------- */
@@ -222,73 +224,73 @@ static uint32_t lastEventAt = 0;
 
 static void drawDiag()
 {
-  VGA.fillRect(0, 16, 320, 92, BG);
-  VGA.setTextColor(DIM);
-  VGA.drawString("raw", 8, 20);
-  VGA.drawString("debounced", 8, 34);
-  VGA.drawString("held", 8, 48);
-  VGA.drawString("state", 8, 62);
-  VGA.drawString("last event", 8, 76);
+  vga.fillRect(0, 16, 320, 92, BG);
+  vga.setTextColor(DIM);
+  vga.drawString("raw", 8, 20);
+  vga.drawString("debounced", 8, 34);
+  vga.drawString("held", 8, 48);
+  vga.drawString("state", 8, 62);
+  vga.drawString("last event", 8, 76);
 
   /* Raw and debounced side by side: on a press the left one flickers and the
    * right one does not. Debouncing explained without a word of theory. */
-  VGA.setTextColor(rawLevel ? OFFC : OKC);
-  VGA.drawString(rawLevel ? "HIGH (up)" : "LOW (pressed)", 90, 20);
-  VGA.setTextColor(stable ? OFFC : OKC);
-  VGA.drawString(stable ? "HIGH (up)" : "LOW (pressed)", 90, 34);
+  vga.setTextColor(rawLevel ? OFFC : OKC);
+  vga.drawString(rawLevel ? "HIGH (up)" : "LOW (pressed)", 90, 20);
+  vga.setTextColor(stable ? OFFC : OKC);
+  vga.drawString(stable ? "HIGH (up)" : "LOW (pressed)", 90, 34);
 
   char buf[32];
-  VGA.setTextColor(C(255, 255, 255));
+  vga.setTextColor(C(255, 255, 255));
   snprintf(buf, sizeof(buf), "%4lu ms", (unsigned long)heldMs);
-  VGA.drawString(buf, 90, 48);
+  vga.drawString(buf, 90, 48);
   /* A progress bar for the long press: hold the button and watch it fill. */
   int w = (int)(heldMs > LONG_MS ? 120 : heldMs * 120 / LONG_MS);
-  VGA.drawRect(160, 48, 122, 9, PANEL);
-  VGA.fillRect(161, 49, w, 7, heldMs >= LONG_MS ? OKC : ACCENT);
+  vga.drawRect(160, 48, 122, 9, PANEL);
+  vga.fillRect(161, 49, w, 7, heldMs >= LONG_MS ? OKC : ACCENT);
 
-  VGA.setTextColor(ACCENT);
-  VGA.drawString(STATE_NAME[bstate], 90, 62);
+  vga.setTextColor(ACCENT);
+  vga.drawString(STATE_NAME[bstate], 90, 62);
 
   /* Hold the gesture name bright for a second so the eye can catch it. */
-  VGA.setTextColor((millis() - lastEventAt < 1000) ? C(255, 240, 120) : DIM);
-  VGA.drawString(lastEventName, 90, 76);
+  vga.setTextColor((millis() - lastEventAt < 1000) ? C(255, 240, 120) : DIM);
+  vga.drawString(lastEventName, 90, 76);
 }
 
 static void drawMenu()
 {
-  VGA.fillRect(0, 110, 320, 130, BG);
-  VGA.drawFastHLine(0, 112, 320, PANEL);
+  vga.fillRect(0, 110, 320, 130, BG);
+  vga.drawFastHLine(0, 112, 320, PANEL);
   for (size_t i = 0; i < ITEM_N; i++)
   {
     int y = 120 + (int)i * 22;
     if ((int)i == sel)
     {
-      VGA.fillRect(4, y - 3, 312, 20, HILITE);
-      VGA.setTextColor(C(255, 255, 255));
-      VGA.drawString(">", 10, y);
+      vga.fillRect(4, y - 3, 312, 20, HILITE);
+      vga.setTextColor(C(255, 255, 255));
+      vga.drawString(">", 10, y);
     }
     else
-      VGA.setTextColor(items[i].enabled ? C(200, 210, 230) : C(90, 95, 110));
-    VGA.drawString(items[i].name, 26, y);
+      vga.setTextColor(items[i].enabled ? C(200, 210, 230) : C(90, 95, 110));
+    vga.drawString(items[i].name, 26, y);
     if (!items[i].enabled)
     {
-      VGA.setTextColor(C(90, 95, 110));
-      VGA.drawString("(needs 16-color mode, see 08_Palette)", 150, y);
+      vga.setTextColor(C(90, 95, 110));
+      vga.drawString("(needs 16-color mode, see 08_Palette)", 150, y);
     }
   }
 }
 
 static void drawHeader()
 {
-  VGA.fillRect(0, 0, 320, 14, PANEL);
-  VGA.setTextColor(C(255, 255, 255));
-  VGA.drawString("6. One button: short=next  long=enter  2x=back", 4, 3);
+  vga.fillRect(0, 0, 320, 14, PANEL);
+  vga.setTextColor(C(255, 255, 255));
+  vga.drawString("6. One button: short=next  long=enter  2x=back", 4, 3);
 }
 
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_320x240);
+  vga.begin();
 
   BG = C(10, 12, 24); PANEL = C(30, 36, 62); ACCENT = C(90, 220, 255);
   DIM = C(120, 130, 160); HILITE = C(40, 70, 130);
@@ -297,7 +299,7 @@ void setup()
   /* Without the pull-up the pin floats when released and the reading is noise. */
   pinMode(BTN_PIN, INPUT_PULLUP);
 
-  VGA.fillScreen(BG);
+  vga.fillScreen(BG);
   drawHeader();
   drawDiag();
   drawMenu();
@@ -334,7 +336,7 @@ void loop()
     {
       running = sel;
       ignoreUntil = millis() + 400;
-      VGA.fillScreen(BG);
+      vga.fillScreen(BG);
       switch (running)
       {
       case 0: screenShapes(); break;
@@ -350,7 +352,7 @@ void loop()
     if (millis() - last >= 50) /* 50 ms is plenty for the diagnostics */
     {
       last = millis();
-      VGA.waitVSync();
+      vga.waitVSync();
       drawDiag();
       drawMenu();
     }
@@ -362,7 +364,7 @@ void loop()
     {
       running = -1;
       ignoreUntil = millis() + 200;
-      VGA.fillScreen(BG);
+      vga.fillScreen(BG);
       drawHeader();
       drawDiag();
       drawMenu();
@@ -376,7 +378,7 @@ void loop()
       lastUs = nowUs;
       if (dt > 0.1f) dt = 0.1f;
 
-      VGA.waitVSync();
+      vga.waitVSync();
       screenBounceStep(dt);
       drawRunningBar();
     }

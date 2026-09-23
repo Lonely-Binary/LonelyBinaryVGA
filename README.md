@@ -1,23 +1,32 @@
-# LB_VGA
+# Lonely Binary VGA
 
-VGA 640x480@60 output for the ESP32-S3, driven by the LCD_CAM parallel peripheral
-into a 16-bit R2R ladder. Drawing is done with [LovyanGFX](https://github.com/lovyan03/LovyanGFX),
-so you get its fonts, JPEG/PNG decoders and anti-aliased primitives for free.
+VGA 640x480@60 from an ESP32-S3, through the LCD_CAM parallel peripheral into a
+16-bit R2R ladder.
 
 ```cpp
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
+
+LB_VGA vga(LB_VGA_320x240);
 
 void setup() {
-  VGA.begin();
-  VGA.fillScreen(TFT_BLACK);
-  VGA.setTextSize(3);
-  VGA.drawString("Hello, VGA!", 40, 100);
+  vga.begin();
+  vga.fillScreen(LB_BLACK);
+  vga.setTextSize(3);
+  vga.drawString("Hello, VGA!", 40, 100);
 }
 void loop() {}
 ```
 
-`VGA` *is* an `LGFX_Sprite`, so every LovyanGFX call works on it directly. There
-is no separate canvas to fetch.
+Drawing comes from [Lonely Binary GFX](https://github.com/Lonely-Binary/LonelyBinaryGFX),
+so the same calls work on a TFT and on e-paper - and a function that takes an
+`LB_Canvas &` runs on all three.
+
+> **v2.0.0 changed the API and the graphics engine.**
+> `VGA.` became `vga.` on an object you construct, and LovyanGFX was replaced by
+> Lonely Binary GFX. Sketches written for v1 need updating; every bundled
+> example already is. In return each sketch is about **47 KB smaller**, there is
+> no third-party graphics dependency, and the same code moves to our other
+> displays.
 
 ## Hardware
 

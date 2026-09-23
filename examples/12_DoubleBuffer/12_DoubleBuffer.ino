@@ -55,9 +55,11 @@
  *
  * Press BOOT to switch between the two demonstrations.
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
 #include <esp_heap_caps.h>
 #include "photo_data.h"
+
+LB_VGA vga(LB_VGA_320x240);
 
 #define BTN_PIN 0
 #define FB_W 320
@@ -66,49 +68,56 @@
 /* blanking = (vFront 10 + vSync 2 + vBack 33) lines x 800 px / 25 MHz */
 #define BLANK_US ((uint32_t)((10 + 2 + 33) * 800ULL * 1000000ULL / 25000000ULL))
 
-static LGFX_Sprite back; /* the back buffer, in PSRAM */
+/* The back buffer: a panel that is just memory, put in PSRAM on purpose.
+ *
+ * !! Exactly the opposite choice from the front buffer !!
+ *   The front buffer is read by the scan-out interrupt 36 MB/s forever, so it
+ *   must be internal SRAM. This one is read once per flip, so PSRAM is fine -
+ *   and PSRAM is the only place with room for a second 150 KB. */
+static LB_MemPanel backPanel(FB_W, FB_H, LB_FMT_RGB565, true);
+static LB_Canvas back(backPanel);
 static uint16_t BG, PANEL, ACCENT, DIM, OKC, BADC;
-static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return VGA.color565(r, g, b); }
+static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return LB_RGB(r, g, b); }
 
 static uint32_t lastDrawUs = 0, lastFlipUs = 0;
 
 static void flip()
 {
   uint32_t t0 = micros();
-  memcpy(VGA.getBuffer(), back.getBuffer(), FB_BYTES);
+  memcpy(vga.panel().buffer(), backPanel.buffer(), FB_BYTES);
   lastFlipUs = micros() - t0;
 }
 
 /* A tearing magnifier: flat colour so a seam has nowhere to hide, plus a
  * diagonal so you can see how far any seam is offset. */
-static void paintAnim(LGFX_Sprite &g, int frame)
+static void paintAnim(LB_Canvas &g, int frame)
 {
-  uint16_t bg = (frame & 1) ? g.color565(200, 30, 30) : g.color565(30, 60, 200);
+  uint16_t bg = (frame & 1) ? LB_RGB(200, 30, 30) : LB_RGB(30, 60, 200);
   g.fillScreen(bg);
   for (int i = 0; i < FB_H; i++)
-    g.drawFastHLine((i * FB_W / FB_H + frame * 3) % FB_W, i, 28, g.color565(255, 255, 255));
+    g.drawFastHLine((i * FB_W / FB_H + frame * 3) % FB_W, i, 28, LB_RGB(255, 255, 255));
 }
 
 /* The bars are written straight to the front buffer, so they tear along with
  * everything else in direct mode. That is fine - they only need to be legible. */
 static void bar(const char *title, const char *how, uint16_t howColor)
 {
-  VGA.fillRect(0, 0, 320, 30, PANEL);
-  VGA.setTextColor(C(255, 255, 255));
-  VGA.drawString(title, 4, 2);
-  VGA.setTextColor(howColor);
-  VGA.drawString(how, 4, 16);
+  vga.fillRect(0, 0, 320, 30, PANEL);
+  vga.setTextColor(C(255, 255, 255));
+  vga.drawString(title, 4, 2);
+  vga.setTextColor(howColor);
+  vga.drawString(how, 4, 16);
 
-  VGA.fillRect(0, 210, 320, 30, PANEL);
-  VGA.setTextColor(DIM);
+  vga.fillRect(0, 210, 320, 30, PANEL);
+  vga.setTextColor(DIM);
   char buf[64];
   snprintf(buf, sizeof(buf), "draw %lu us   flip %lu us",
            (unsigned long)lastDrawUs, (unsigned long)lastFlipUs);
-  VGA.drawString(buf, 4, 213);
+  vga.drawString(buf, 4, 213);
   snprintf(buf, sizeof(buf), "blanking budget %lu us  -> flip = %lu%%",
            (unsigned long)BLANK_US, (unsigned long)(lastFlipUs * 100 / BLANK_US));
-  VGA.setTextColor(lastFlipUs > BLANK_US ? BADC : OKC);
-  VGA.drawString(buf, 4, 226);
+  vga.setTextColor(lastFlipUs > BLANK_US ? BADC : OKC);
+  vga.drawString(buf, 4, 226);
 }
 
 /* The photo: this is where a back buffer actually earns its keep. */
@@ -118,10 +127,10 @@ static void demoPhoto(bool useBackBuffer)
   {
     /* Decode into PSRAM. Slow does not matter - nobody is looking at it. */
     uint32_t t0 = micros();
-    back.fillScreen(back.color565(10, 12, 24));
+    back.fillScreen(LB_RGB(10, 12, 24));
     back.drawJpg(photo_jpg, PHOTO_JPG_LEN, 0, 0);
     lastDrawUs = micros() - t0;
-    VGA.waitVSync();
+    vga.waitVSync();
     flip(); /* the whole image appears together */
   }
   else
@@ -129,8 +138,8 @@ static void demoPhoto(bool useBackBuffer)
     /* Decode straight to the screen. The beam scans the display three and a
      * half times during those 59 ms, so the photo grows in from the top. */
     uint32_t t0 = micros();
-    VGA.fillScreen(BG);
-    VGA.drawJpg(photo_jpg, PHOTO_JPG_LEN, 0, 0);
+    vga.fillScreen(BG);
+    vga.drawJpg(photo_jpg, PHOTO_JPG_LEN, 0, 0);
     lastDrawUs = micros() - t0;
     lastFlipUs = 0;
   }
@@ -156,7 +165,7 @@ void setup()
 {
   Serial.begin(115200);
   delay(200);
-  VGA.begin(LB_VGA_320x240);
+  vga.begin();
   pinMode(BTN_PIN, INPUT_PULLUP);
 
   BG = C(10, 12, 24); PANEL = C(30, 36, 62); ACCENT = C(90, 220, 255);
@@ -164,17 +173,15 @@ void setup()
 
   /* setPsram(true) - the exact opposite of the front buffer, and for a good
    * reason: this one is read once per flip, not 36 MB/s forever. */
-  back.setColorDepth(lgfx::color_depth_t::rgb565_nonswapped);
-  back.setPsram(true);
-  if (!back.createSprite(FB_W, FB_H))
+  if (!backPanel.ok())
   {
-    VGA.fillScreen(BG);
-    VGA.setTextColor(BADC);
-    VGA.drawString("back buffer alloc failed - is PSRAM set to OPI?", 8, 100);
+    vga.fillScreen(BG);
+    vga.setTextColor(BADC);
+    vga.drawString("back buffer alloc failed - is PSRAM set to OPI?", 8, 100);
     while (1) delay(1000);
   }
   Serial.printf("front @ %p (internal SRAM), back @ %p (PSRAM), %u bytes PSRAM left\n",
-                VGA.getBuffer(), back.getBuffer(),
+                vga.panel().buffer(), backPanel.buffer(),
                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
   Serial.printf("blanking interval %lu us. Press BOOT to switch demo\n",
                 (unsigned long)BLANK_US);
@@ -192,7 +199,7 @@ void loop()
     demo = 1 - demo;
     useBack = true;
     lastSwitch = 0;
-    VGA.fillScreen(BG);
+    vga.fillScreen(BG);
     Serial.printf(">>> demo: %s\n", demo ? "photo" : "animation");
   }
 
@@ -216,14 +223,14 @@ void loop()
       uint32_t t0 = micros();
       paintAnim(back, frame);
       lastDrawUs = micros() - t0;
-      VGA.waitVSync();
+      vga.waitVSync();
       flip();
     }
     else
     {
-      VGA.waitVSync();
+      vga.waitVSync();
       uint32_t t0 = micros();
-      paintAnim(VGA, frame);
+      paintAnim(vga, frame);
       lastDrawUs = micros() - t0;
       lastFlipUs = 0;
     }

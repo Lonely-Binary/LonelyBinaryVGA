@@ -19,7 +19,9 @@
  * line; overwrite it mid-frame and a band of wrong colours appears. The 1.44 ms
  * of blanking is far more than the fourteen entries need.
  */
-#include <LB_VGA.h>
+#include <LonelyBinaryVGA.h>
+
+LB_VGA vga(LB_VGA_640x480_16);
 
 /* 0 stays the background and 15 stays white for text; 1..14 cycle. */
 #define CYC_FIRST 1
@@ -63,7 +65,7 @@ static uint32_t drawPattern()
     {
       int dx = x - 320, dy = (y - 240) * 2; /* x2 compensates the 640x480 aspect */
       int d = (int)(sqrtf((float)(dx * dx + dy * dy)) / 12.0f);
-      VGA.drawPixel(x, y, CYC_FIRST + (d % CYC_COUNT));
+      vga.drawPixel(x, y, LB_INDEX(CYC_FIRST + (d % CYC_COUNT)));
     }
   }
   return micros() - t0;
@@ -74,13 +76,13 @@ static uint32_t patternUs = 0;
 void setup()
 {
   Serial.begin(115200);
-  VGA.begin(LB_VGA_640x480_16);
+  vga.begin();
   buildWheel();
 
-  VGA.setPaletteColor(0, 0, 0, 20);
-  VGA.setPaletteColor(15, 255, 255, 255);
+  vga.setPaletteColor(0, 0, 0, 20);
+  vga.setPaletteColor(15, 255, 255, 255);
   for (int i = 0; i < CYC_COUNT; i++)
-    VGA.setPaletteColor(CYC_FIRST + i, wheel[i][0], wheel[i][1], wheel[i][2]);
+    vga.setPaletteColor(CYC_FIRST + i, wheel[i][0], wheel[i][1], wheel[i][2]);
 
   /*
    * drawPixel per pixel is used here on purpose: the rings have to be computed
@@ -100,13 +102,13 @@ void loop()
   static int offset = 0;
   static uint32_t rotUs = 0;
 
-  VGA.waitVSync(); /* blanking first, then rewrite the table */
+  vga.waitVSync(); /* blanking first, then rewrite the table */
 
   uint32_t t0 = micros();
   for (int i = 0; i < CYC_COUNT; i++)
   {
     const uint8_t *c = wheel[(i + offset) % CYC_COUNT];
-    VGA.setPaletteColor(CYC_FIRST + i, c[0], c[1], c[2]);
+    vga.setPaletteColor(CYC_FIRST + i, c[0], c[1], c[2]);
   }
   rotUs = micros() - t0;
   offset = (offset + 1) % CYC_COUNT;
@@ -117,17 +119,17 @@ void loop()
   if (millis() - last >= 500)
   {
     last = millis();
-    VGA.fillRect(0, 400, 470, 80, 0);
-    VGA.setFont(&fonts::AsciiFont8x16);
-    VGA.setTextColor(15);
-    VGA.drawString("The rings are animating.", 8, 404);
-    VGA.drawString("Pixels redrawn per frame: 0", 8, 420);
+    vga.fillRect(0, 400, 470, 80, LB_INDEX(0));
+    vga.setFont(&LB_Font8x16);
+    vga.setTextColor(LB_INDEX(15));
+    vga.drawString("The rings are animating.", 8, 404);
+    vga.drawString("Pixels redrawn per frame: 0", 8, 420);
     char buf[80];
     snprintf(buf, sizeof(buf), "redraw whole pattern : %lu us", (unsigned long)patternUs);
-    VGA.drawString(buf, 8, 440);
+    vga.drawString(buf, 8, 440);
     snprintf(buf, sizeof(buf), "rotate palette       : %lu us  (%lux faster)",
              (unsigned long)rotUs, (unsigned long)(rotUs ? patternUs / rotUs : 0));
-    VGA.drawString(buf, 8, 456);
+    vga.drawString(buf, 8, 456);
 
     Serial.printf("redraw %lu us  vs  palette rotate %lu us\n",
                   (unsigned long)patternUs, (unsigned long)rotUs);
