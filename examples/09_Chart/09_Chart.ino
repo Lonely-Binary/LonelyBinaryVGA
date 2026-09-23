@@ -1,0 +1,230 @@
+/*
+ * 09_Chart - charts, deliberately without a charting library.
+ *
+ * Bar charts and line charts come apart into three things: mapping a value to a
+ * pixel, drawing a line, and aligning text. All of it appeared in the previous
+ * examples. Wrapping that in a library hides exactly the parts worth learning,
+ * and leaves you unable to draw a chart anywhere else.
+ *
+ * 16-colour mode, because charts live or die on readable axes and labels.
+ *
+ * The single most important function here is mapY(). **Screen y grows downward
+ * while chart values grow upward** - every upside-down first chart comes from
+ * getting that one line wrong.
+ *
+ * Data:
+ *   bars  - the three measured ISR costs from this project's README (real)
+ *   lines - two series:
+ *             yellow = ESP32-S3 internal temperature (real, no wiring needed)
+ *             cyan   = a sine wave, labelled SIMULATED
+ *
+ * Why include a fake series? The internal temperature sensor is quantised to
+ * roughly 1 C: it sits on 27.8 or 28.8 and steps between them every few tens of
+ * seconds. That is a true reading, but plotted it looks like a flat line, and
+ * the natural conclusion is "my chart code is broken" - so people go and edit
+ * working code. A series that definitely moves, drawn right next to it, settles
+ * the question at a glance.
+ *
+ * That is the general habit: **before concluding something is broken, put a
+ * known-good control next to it.**
+ */
+#include <LB_VGA.h>
+
+enum { C_BG = 0, C_BLUE, C_GREEN, C_CYAN, C_RED, C_MAGENTA, C_BROWN, C_GRAY,
+       C_DGRAY, C_LBLUE, C_LGREEN, C_LCYAN, C_LRED, C_LMAGENTA, C_YELLOW, C_WHITE };
+
+/*
+ * Value to screen y. The whole chart rests on these seven lines.
+ *
+ * top is the top edge of the plot area, h its height. Note it is top + h - ...:
+ * a larger value gives a smaller y, i.e. higher up. Writing top + ... flips the
+ * chart upside down.
+ */
+static int mapY(float v, float vmin, float vmax, int top, int h)
+{
+  if (vmax <= vmin) return top + h;
+  float t = (v - vmin) / (vmax - vmin);
+  if (t < 0) t = 0;
+  if (t > 1) t = 1;
+  return top + h - (int)(t * h);
+}
+
+/* ---------- bar chart ---------- */
+struct Bar { const char *name; float value; uint8_t color; };
+static const Bar bars[] = {
+    {"320x240", 25, C_LGREEN},
+    {"640x480x16", 46, C_LCYAN},
+    {"PSRAM", 68, C_LRED},
+};
+#define BAR_N (sizeof(bars) / sizeof(bars[0]))
+
+static void drawBarChart(int x0, int y0, int w, int h)
+{
+  const float vmax = 100;
+
+  /* Grid and y labels first, so the bars are drawn over them rather than
+   * scratched through by them. */
+  VGA.setFont(&fonts::AsciiFont8x16);
+  for (int v = 0; v <= 100; v += 25)
+  {
+    int y = mapY(v, 0, vmax, y0, h);
+    VGA.drawFastHLine(x0, y, w, C_DGRAY);
+    VGA.setTextColor(C_GRAY);
+    char t[8];
+    snprintf(t, sizeof(t), "%3d%%", v);
+    VGA.drawString(t, x0 - 36, y - 8); /* -8 = half a line, to sit on the tick */
+  }
+
+  /* Bar width and spacing derive from the count, so adding a bar needs no other
+   * change. */
+  const int slot = w / BAR_N, bw = slot * 2 / 3;
+  for (size_t i = 0; i < BAR_N; i++)
+  {
+    int bx = x0 + i * slot + (slot - bw) / 2;
+    int by = mapY(bars[i].value, 0, vmax, y0, h);
+    VGA.fillRect(bx, by, bw, y0 + h - by, bars[i].color);
+
+    char t[8];
+    snprintf(t, sizeof(t), "%d%%", (int)bars[i].value);
+    VGA.setTextColor(C_WHITE);
+    VGA.drawString(t, bx + (bw - VGA.textWidth(t)) / 2, by - 18); /* centred by measurement */
+
+    VGA.setTextColor(C_GRAY);
+    VGA.drawString(bars[i].name,
+                   bx + (bw - VGA.textWidth(bars[i].name)) / 2, y0 + h + 4);
+  }
+
+  VGA.drawFastHLine(x0, y0 + h, w, C_WHITE);
+  VGA.drawFastVLine(x0, y0, h, C_WHITE);
+}
+
+/* ---------- live line chart ---------- */
+#define HIST 120 /* 120 samples, one per second = two minutes */
+static float hTemp[HIST]; /* real: chip temperature  */
+static float hSim[HIST];  /* fake: sine, labelled as such */
+static int histN = 0;
+
+static void pushSample(float t, float sim)
+{
+  if (histN < HIST)
+  {
+    hTemp[histN] = t;
+    hSim[histN] = sim;
+    histN++;
+  }
+  else
+  {
+    for (int i = 0; i < HIST - 1; i++)
+    {
+      hTemp[i] = hTemp[i + 1];
+      hSim[i] = hSim[i + 1];
+    }
+    hTemp[HIST - 1] = t;
+    hSim[HIST - 1] = sim;
+  }
+}
+
+/* One series; both share it, and a third would just be another call. */
+static void plot(const float *d, int n, float vmin, float vmax,
+                 int x0, int y0, int w, int h, uint8_t color)
+{
+  for (int i = 1; i < n; i++)
+    VGA.drawLine(x0 + (i - 1) * w / (HIST - 1), mapY(d[i - 1], vmin, vmax, y0, h),
+                 x0 + i * w / (HIST - 1), mapY(d[i], vmin, vmax, y0, h), color);
+}
+
+static void drawLineChart(int x0, int y0, int w, int h)
+{
+  VGA.fillRect(x0 - 44, y0 - 20, w + 48, h + 40, C_BG);
+  if (histN < 2) return;
+
+  /* The range has to follow the data. Hard-coding 0..100 would leave the
+   * temperature pinned to the bottom edge and unreadable. Both series share one
+   * range so they stay comparable. */
+  float vmin = hTemp[0], vmax = hTemp[0];
+  for (int i = 0; i < histN; i++)
+  {
+    if (hTemp[i] < vmin) vmin = hTemp[i];
+    if (hTemp[i] > vmax) vmax = hTemp[i];
+    if (hSim[i] < vmin) vmin = hSim[i];
+    if (hSim[i] > vmax) vmax = hSim[i];
+  }
+  float pad = (vmax - vmin) * 0.15f;
+  if (pad < 0.5f) pad = 0.5f; /* flat data still needs a range, or we divide by zero */
+  vmin -= pad;
+  vmax += pad;
+
+  VGA.setFont(&fonts::AsciiFont8x16);
+  for (int i = 0; i <= 2; i++)
+  {
+    float v = vmin + (vmax - vmin) * i / 2;
+    int y = mapY(v, vmin, vmax, y0, h);
+    VGA.drawFastHLine(x0, y, w, C_DGRAY);
+    VGA.setTextColor(C_GRAY);
+    char t[10];
+    snprintf(t, sizeof(t), "%.1f", v);
+    VGA.drawString(t, x0 - 44, y - 8);
+  }
+
+  /* Join consecutive samples with segments. Plotting isolated points leaves
+   * gaps between them. */
+  plot(hSim, histN, vmin, vmax, x0, y0, w, h, C_LCYAN);
+  plot(hTemp, histN, vmin, vmax, x0, y0, w, h, C_YELLOW);
+
+  /* A legend is not optional when one of the series is invented. */
+  VGA.fillRect(x0 + w - 200, y0 + 4, 12, 3, C_YELLOW);
+  VGA.setTextColor(C_YELLOW);
+  VGA.drawString("chip temp (real)", x0 + w - 184, y0 - 4);
+  VGA.fillRect(x0 + w - 200, y0 + 24, 12, 3, C_LCYAN);
+  VGA.setTextColor(C_LCYAN);
+  VGA.drawString("sine (SIMULATED)", x0 + w - 184, y0 + 16);
+
+  int lx = x0 + (histN - 1) * w / (HIST - 1);
+  int ly = mapY(hTemp[histN - 1], vmin, vmax, y0, h);
+  VGA.fillCircle(lx, ly, 3, C_LRED);
+  char t[16];
+  snprintf(t, sizeof(t), "%.1fC", hTemp[histN - 1]);
+  VGA.setTextColor(C_WHITE);
+  VGA.drawString(t, lx - VGA.textWidth(t) - 6, ly - 18);
+
+  VGA.drawFastHLine(x0, y0 + h, w, C_WHITE);
+  VGA.drawFastVLine(x0, y0, h, C_WHITE);
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  VGA.begin(LB_VGA_640x480_16);
+  VGA.setPaletteColor(C_BG, 0, 0, 25);
+  VGA.fillScreen(C_BG);
+
+  VGA.fillRect(0, 0, 640, 28, C_BLUE);
+  VGA.setFont(&fonts::AsciiFont8x16);
+  VGA.setTextColor(C_YELLOW);
+  VGA.drawString("5. Charts  -  drawn by hand, no chart library", 8, 6);
+
+  VGA.setTextColor(C_WHITE);
+  VGA.drawString("ISR cost per display mode (measured)", 60, 40);
+  drawBarChart(60, 66, 520, 180);
+
+  VGA.setTextColor(C_WHITE);
+  VGA.drawString("1 sample/s   (see legend: one line is simulated)", 60, 276);
+
+  Serial.println("Bars are this project's own measurements; lines are temperature + a control");
+}
+
+void loop()
+{
+  static uint32_t last = 0;
+  if (last == 0 || millis() - last >= 1000)
+  {
+    last = millis();
+    /* Match the sine's amplitude to the temperature so both fit one range. */
+    float t = temperatureRead();
+    float sim = t + 3.0f * sinf(millis() / 8000.0f);
+    pushSample(t, sim);
+    VGA.waitVSync();
+    drawLineChart(60, 302, 520, 150);
+  }
+  delay(20);
+}

@@ -1,0 +1,28 @@
+#######################################
+# Syntax colouring for LB_VGA
+#
+# KEYWORD1 = classes and datatypes
+# KEYWORD2 = methods and functions
+# LITERAL1 = constants
+#
+# Fields MUST be separated by a TAB, not spaces. With spaces the IDE
+# silently applies no colouring at all.
+#######################################
+
+LB_VGA_Class	KEYWORD1
+LB_VGA_Mode	KEYWORD1
+VGA	KEYWORD1
+
+begin	KEYWORD2
+waitVSync	KEYWORD2
+frameCount	KEYWORD2
+mode	KEYWORD2
+setPaletteColor	KEYWORD2
+syncPalette	KEYWORD2
+isrLoadPercent	KEYWORD2
+
+LB_VGA_320x240	LITERAL1
+LB_VGA_640x480_16	LITERAL1
+LB_VGA_PIN_HSYNC	LITERAL1
+LB_VGA_PIN_VSYNC	LITERAL1
+LB_VGA_PIN_DATA_INIT	LITERAL1
